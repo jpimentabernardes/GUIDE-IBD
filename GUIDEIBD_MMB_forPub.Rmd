@@ -1,0 +1,432 @@
+---
+title: "GUIDE IBD"
+author: "Joana P. Bernardes and Charlot Jaeckel"
+date: "3/4/2021"
+output: pdf_document
+    fig_width: 7
+    fig_height: 6
+    fig_caption: true
+
+---
+
+## R Markdown
+
+This document will create the plots for GUIDE-IBD molecular medicine board (MMB) reports.
+Each report will be focused on an individual samples. The reference samples were collect from eMed and SYSCID-sc cohorts. In total, we will use 26 genes from blood samples and 16 genes for biopsy samples to tested for early remission patterns by comparing the test samples with the reference samples.
+Samples were collected from blood or biopsy tissues enrolled in the MMB setup. These patients are therapy-naive CD and UC patients from Kiel, Hamburg or Hannover.
+For more information about the patients please see https://survey.ikmb.uni-kiel.de/en/landing_page/about_us
+
+
+# Load packages
+```{r setup, include=FALSE}
+library(ggplot2)
+library(gplots)
+library(RColorBrewer)
+library(plyr)
+library(dplyr)
+library(reshape2)
+```
+
+
+# set working window
+```{r}
+require("knitr")
+opts_knit$set(root.dir = "~/PatientX/")
+setwd( "~/.")
+```
+
+
+
+
+# Blood
+## load query data (saved as .csv)
+```{r}
+data<-read.csv2('~/PatientX/table.csv')
+data$CT<-as.numeric(sub(",", ".", data$CT, fixed = TRUE))
+```
+
+## Data wrangling > From raw CT values to relative normalized values.
+
+```{r}
+table(data$Sample.Name)
+data_sample<-subset(data, data$Sample.Name %in% 'Blood Sample PatientX')
+data_sample = transform(data_sample, Target.Name = colsplit(Target.Name,pattern = "_", names = c('Tissue', 'Assay', 'Gene.ID','Primer' , "Primer2")))
+
+average<-aggregate(x = data_sample$CT,                # Specify data column
+          by = list(data_sample$Target.Name$Gene.ID),              # Specify group indicator
+          FUN = mean) 
+rownames(average)<-average$Group.1
+average$Group.1=NULL
+average$raw<-average$x
+average$x=NULL
+
+# housekeeping
+hk1<-subset(average, rownames(average) %in% c('TBP', 'ACTB'))
+hk2<-as.data.frame(colMeans(hk1))
+norm_hk<-subset(hk2, rownames(hk2) %in% c('raw'))
+
+# biomarkers
+genes<- subset(average, rownames(average) %in% c('BUB1B','HIVEP2','SAMD9L','IFI16','CASP5','IFI44', 'IFIT5', 'IL18RAP','CXXC5','KIAA0368', 'TREM1','FAM134B','MKI67','APOL6','FAM208B','ARHGAP35','FCGR1B;FCGR1A;FCGR1CP', 'FCRL5', 'HP','ADGRG1','COMMD3,COMMD3-BMI1','RPRD2','SENP7', 'ZNF839','GBP5', 'GZMK'))
+table<-genes
+# relative
+table$relative<-genes$raw/norm_hk$`colMeans(hk1)`
+# normalize
+table$relative_norm<-2^-table$relative
+table$Test<-table$relative_norm
+w14<-table
+
+write.csv(table, file='NormData_PatientX.csv')
+```
+
+# load reference data
+```{r}
+# blood
+reference<-read.csv2('~/Reference_Blood.csv', row.names = 1, dec=',')
+metadata<-read.csv2('~/Metadata_Blood.csv',row.names = 1)
+```
+
+## Merge query with reference data
+```{r}
+reference$GeneID<-rownames(reference)
+table$GeneID<- rownames(table)
+w0$GeneID<- rownames(w0)
+w2$GeneID<- rownames(w2)
+w6$GeneID<- rownames(w6)
+w14$GeneID <- rownames(w14)
+w26$GeneID <- rownames(w26)
+w0<-w0[ ,4:5]
+w2<-w2[ ,4:5]
+w6<-w6[ ,4:5]
+w14<-w14[ ,4:5]
+w26<-w26[ ,4:5]
+
+
+Reference_Test <- merge(reference, w0,
+              by = 'GeneID')
+Reference_Test2 <- merge(Reference_Test, w2,
+              by = 'GeneID')
+Reference_Test3 <- merge(Reference_Test2, w6,
+              by = 'GeneID')
+Reference_Test4 <- merge(Reference_Test3, w14,
+              by = 'GeneID')
+Reference_Test5 <- merge(Reference_Test4, w26,
+              by = 'GeneID')
+rownames(Reference_Test4)<-Reference_Test4$GeneID
+Reference_Test4$GeneID=NULL
+
+
+metadata$Test<-'w0'
+metadata$Test2<-'w2'
+metadata$Test3<-'w6'
+metadata$Test4<-'w14'
+metadata$Test5<-'w26'
+metadata2<-as.data.frame(t(metadata))
+
+# if there are missing values remove before principal component
+#genes_to_remove<-c("CXXC5")
+Reference_Test5<-Reference_Test4[!(row.names(Reference_Test4) %in% genes_to_remove),]
+
+
+## PCA for emed and scRNAseq cohorts blood 
+pc <-prcomp(na.omit(t(Reference_Test5)))
+pc_df <- as.data.frame(pc$x)
+pc_df$Type<-rownames(pc_df)
+pc_df$Remission<-metadata2$Remission
+pc_df$Remission2<-metadata2$Remission2
+pc_df$Disease<-metadata2$Disease
+pc_df$cohort<-metadata2$cohort
+
+pc_df2<-subset(pc_df, !pc_df$Type %in% c('Test.x', 'Test.y'))
+pc_df2<-subset(pc_df, !pc_df$Type %in% c('Test.x', 'Test.y', 'Test.x.1','Test.y.1'))
+pc_df2<-subset(pc_df, !pc_df$Type %in% c('Test.x', 'Test.y', 'Test.x','Test.y', 'Test'))
+pc_df3<-pc_df[c(95), ]
+pc_df4<-pc_df[c(96), ]
+pc_df5<-pc_df[c(97), ]
+pc_df6<-pc_df[c(98), ]
+pc_df7<-pc_df[c(99), ]
+
+
+```
+
+## Plot MMB PCA
+```{r, fig.width = 6, fig.height=5}
+eigs <- pc$sdev^2
+eigs[1] / sum(eigs)
+eigs[2] / sum(eigs)
+
+#run this
+# overlay for multiple samples
+overlay.fs1 <- pc_df3
+overlay.fs2 <- pc_df2
+overlay.fs3 <- pc_df4
+overlay.fs4 <- pc_df5
+overlay.fs5 <- pc_df6
+overlay.fs6 <- pc_df7
+
+
+p<-ggplot(pc_df, aes(x = PC1, y =  PC2,  label=Type, color=Remission2,  group=Remission2)) + 
+    geom_point(data = overlay.fs2,size=3)  +  
+  xlab("PC1 (47.71% variance)") +  ylab("PC2 (16.22% variance)")+
+  theme(text = element_text(size=rel(16))) + theme_bw()+
+  #scale_color_manual(values = c( "grey","darkorange1","darkolivegreen3", 'black', 'red', 'blue'))+
+  scale_color_manual(values = c( "grey","darkorange1","darkolivegreen3", 'black','forestgreen', 'red', 'blue'))+
+  #scale_color_manual(values = c( "grey","darkorange1","darkolivegreen3", 'black','forestgreen', 'red', 'gold', 'blue', 'black'))+
+  scale_size_area(max_size=2)+
+  stat_ellipse(type = "t", linetype = 3, level = 0.90) +
+  stat_ellipse(type = "t", linetype = 2, level = 0.80) +
+  stat_ellipse(type = "t",linetype = 1, level = 0.70)
+p1 <- p + geom_point(data = overlay.fs1, size=5, color=c('black'))+
+  geom_text(data = overlay.fs1, aes(x = PC1, y = PC2, label = "0w", vjust=2))
+p2 <- p1 + geom_point(data = overlay.fs3, size=5, color=c('red'))+
+  geom_text(data = overlay.fs3, aes(x = PC1, y = PC2, label = "2w", vjust=2))
+p3 <- p2 + geom_point(data = overlay.fs4, size=5, color=c('blue'))+
+  geom_text(data = overlay.fs4, aes(x = PC1, y = PC2, label = "6w", vjust=2))
+p4 <- p3 + geom_point(data = overlay.fs5, size=5, color=c('forestgreen'))+
+  geom_text(data = overlay.fs5, aes(x = PC1, y = PC2, label = "14w", vjust=2))
+p5 <- p4 + geom_point(data = overlay.fs6, size=5, color=c('gold'))+
+  geom_text(data = overlay.fs6, aes(x = PC1, y = PC2, label = "26w", vjust=2))
+pdf("PCA_PatientX_Blood1_Blood2_Blood3_Blood4_PC12.pdf", width = 4, height = 3.2)
+p4
+dev.off()
+```
+
+
+# Biopsy
+# load query data (saved as .csv)
+
+## Data wrangling > From raw CT values to relative normalized values.
+
+```{r}
+table(data$Sample.Name)
+
+data_sample<-subset(data, data$Sample.Name %in% 'Biopsy Sample PatientX')
+data_sample<- transform(data_sample, Target.Name = colsplit(Target.Name,pattern = "_", names = c('Tissue', 'Assay', 'Gene.ID','Primer' , "Primer2")))
+
+average<-aggregate(x = data_sample$CT,                # Specify data column
+          by = list(data_sample$Target.Name$Gene.ID),              # Specify group indicator
+          FUN = mean) 
+rownames(average)<-average$Group.1
+average$Group.1=NULL
+average$raw<-average$x
+average$x=NULL
+
+
+# housekeeping
+hk1<-subset(average, rownames(average) %in% c('TBP', 'ACTB'))
+hk2<-as.data.frame(colMeans(hk1))
+norm_hk<-subset(hk2, rownames(hk2) %in% c('raw'))
+
+# biomarkers
+table<- subset(average, rownames(average) %in% c("AQP9", "BANK1","CHI3L2","CMTM2", "CSF3R", "CXCL13",
+                                                 "FAM129C", "FCRL1", "IL13RA2", "MS4A1", "PAX5",
+                                                 "PTGS2", "S100A9", "STC1", "TNF", "TREM1" ))
+
+# relative
+table$relative<-table$raw/norm_hk$`colMeans(hk1)`
+# normalize
+table$relative_norm<-2^-table$relative
+table$Test<-table$relative_norm
+w14<-table
+
+write.csv(table, file='NormData_PatientX_Biopsy_w14.csv')
+```
+
+# load reference data
+```{r}
+# biopsy
+reference<-read.csv('~/Documents/IKMB/GUIDE IBD/GUIDEIBD_MMB/Reference_Biopsy.csv', row.names = 1, dec='.')
+metadata<-read.csv('~/Documents/IKMB/GUIDE IBD/GUIDEIBD_MMB/Metadata_Biopsy.csv',row.names = 1)
+```
+
+## Merge query with reference data
+```{r}
+reference$GeneID<-rownames(reference)
+w0$GeneID<- rownames(w0)
+w14$GeneID<- rownames(w14)
+w26$GeneID<- rownames(w26)
+
+w0<-w0[ ,4:5]
+w14<-w14[ ,4:5]
+w26<-w26[ ,4:5]
+
+Reference_Test <- merge(reference, w0,
+              by = 'GeneID')
+Reference_Test2 <- merge(Reference_Test, w14,
+              by = 'GeneID')
+Reference_Test3 <- merge(Reference_Test2, w26,
+              by = 'GeneID')
+rownames(Reference_Test2)<-Reference_Test2$GeneID
+Reference_Test2$GeneID=NULL
+
+
+
+metadata$Test<-'w0'
+metadata$Test2<-'w14'
+metadata$Test3<-'w26'
+metadata2<-as.data.frame(t(metadata))
+
+# if there are missing values remove before principal component
+#genes_to_remove<-c("FAM129C", 'IL13RA2', 'MS4A1')
+#Reference_Test3<-Reference_Test2[!(row.names(Reference_Test2) %in% genes_to_remove),]
+
+
+## PCA for emed and scRNAseq cohorts blood 
+pc <-prcomp(na.omit(t(Reference_Test3)))
+pc_df <- as.data.frame(pc$x)
+pc_df$Type<-rownames(pc_df)
+pc_df$Remission<-metadata2$Remission
+pc_df$Remission2<-metadata2$Remission2
+pc_df$Disease<-metadata2$Disease
+pc_df$cohort<-metadata2$cohort
+
+pc_df2<-subset(pc_df, !pc_df$Type %in% c('Test'))
+pc_df2<-subset(pc_df, !pc_df$Type %in% c('Test.x', 'Test.y'))
+pc_df2<-subset(pc_df, !pc_df$Type %in% c('Test.x', 'Test.y', 'Test'))
+
+pc_df3<-pc_df[c(32), ]
+pc_df4<-pc_df[c(33), ]
+pc_df5<-pc_df[c(34), ]
+
+```
+
+## Plot MMB PCA
+```{r, fig.width = 2.8, fig.height=2}
+eigs <- pc$sdev^2
+eigs[1] / sum(eigs)
+eigs[2] / sum(eigs)
+
+
+# overlay for multiple samples
+overlay.fs1 <- pc_df3
+overlay.fs2 <- pc_df2
+overlay.fs3 <- pc_df4
+overlay.fs4 <- pc_df5
+
+p<-ggplot(pc_df, aes(x = PC1, y =  PC2,  label=Type, color=Remission2,  group=Remission2)) + 
+    geom_point(data = overlay.fs2,size=3)  +  
+  xlab("PC1 (80.47% variance)") +  ylab("PC2 (13.57% variance)") + 
+  theme(text = element_text(size=rel(14))) + theme_bw()+
+  #scale_color_manual(values = c( "grey","darkorange1","darkolivegreen3", 'black', 'red', 'blue'))+
+  scale_color_manual(values = c( "grey","darkorange1","darkolivegreen3", 'black', 'forestgreen'))+
+  #scale_color_manual(values = c( "grey","darkorange1","darkolivegreen3", 'black','forestgreen', 'gold'))+
+  scale_size_area(max_size=2)+
+  stat_ellipse(type = "t", linetype = 3, level = 0.90) +
+  stat_ellipse(type = "t", linetype = 2, level = 0.80) +
+  stat_ellipse(type = "t",linetype = 1, level = 0.70)
+p1 <- p + geom_point(data = overlay.fs1, size=5, color=c('black'))+
+  geom_text(data = overlay.fs1, aes(x = PC1 , y = PC2, label = "0w", vjust=2))
+p2 <- p1 + geom_point(data = overlay.fs3, size=5, color=c('forestgreen'))+
+  geom_text(data = overlay.fs3, aes(x = PC1, y = PC2, label = "14w", vjust=2))
+p3 <- p2 + geom_point(data = overlay.fs4, size=5, color=c('gold'))+
+  geom_text(data = overlay.fs4, aes(x = PC1, y = PC2, label = "26w", vjust=2))
+pdf("PCA_PatientX_Biopsy1_Biopsy2_PC12.pdf", width = 4, height = 3.2)
+p2
+dev.off()
+
+```
+
+
+
+## Plot MMB heatmap for inflammation score
+# add scores from https://survey.ikmb.uni-kiel.de/en/landing_page/about_us
+```{r}
+scores<-read.csv2('~/Inflammatory score.csv',  dec = ',')
+min(scores$CRP, na.rm = TRUE)
+max(scores$CRP, na.rm = TRUE)
+
+min(scores$Calprotectin, na.rm = TRUE)
+max(scores$Calprotectin, na.rm = TRUE)
+
+min(scores$Leukocyte, na.rm = TRUE)
+max(scores$Leukocyte, na.rm = TRUE)
+
+scores$CRP_rel = scores$CRP *100 / 75.7
+scores$Calprotectin_rel = scores$Calprotectin *100 / 3916
+scores$Leukocyte_rel = scores$Leukocyte *100 / 21.86
+
+scores$name<-paste(scores$Cohort, scores$Patient, scores$TimePoint, scores$Remission, sep = "_")
+
+vars<-c('CRP_rel', 'Calprotectin_rel', 'Leukocyte_rel')
+inflamm<-scores[vars]
+inflamm$Sum<-rowMeans(inflamm, na.rm=TRUE)
+rownames(inflamm)<- scores$name
+
+```
+
+### Go to portal and calculate the inflammation score based on sample (Patient and Timepoint)
+```{r}
+CRP<-15.3
+Calprotectin<-73.2
+Leukocyte<-8.6
+Patient.w0<-as.data.frame(cbind(CRP, Calprotectin,Leukocyte))
+
+CRP<-4.4
+Calprotectin<-104
+Leukocyte<-7.5
+Patient.w2<-as.data.frame(cbind(CRP, Calprotectin, Leukocyte))
+
+CRP<-6.2
+Calprotectin<-NA
+Leukocyte<-7.5
+Patient.w6<-as.data.frame(cbind(CRP, Calprotectin, Leukocyte))
+
+CRP<-3.4
+Calprotectin<-13.60
+Leukocyte<-6.1
+Patient.w14<-as.data.frame(cbind(CRP, Calprotectin, Leukocyte))
+
+CRP<-4
+Calprotectin<-16.7
+Leukocyte<-5.7
+Patient.w26<-as.data.frame(cbind(CRP, Calprotectin, Leukocyte))
+
+Patient.w0$Time<-'w0'
+Patient.w2$Time<-'w2'
+Patient.w6$Time<-'w6'
+Patient.w14$Time<-'w14'
+Patient.w26$Time<-'w26'
+
+Patient<-rbind(Patient.w0, Patient.w2)
+Patient<-rbind(Patient.w0, Patient.w2, Patient.w6)
+Patient<-rbind(Patient.w0, Patient.w2, Patient.w6, Patient.w14)
+Patient<-rbind(Patient.w0, Patient.w2, Patient.w6, Patient.w14, Patient.w26)
+
+rownames(Patient)<-Patient$Time
+
+Patient$CRP_rel = Patient$CRP *100 / 75.7
+Patient$Calprotectin_rel = Patient$Calprotectin *100 / 3916
+Patient$Leukocyte_rel = Patient$Leukocyte *100 / 21.86
+
+Patient2<-Patient[ ,5:7]
+Patient2$Sum<-rowMeans(Patient2, na.rm=TRUE)
+
+lines <- data.frame(vlines =Patient2$Sum, labels = c("0 w", "2 w"), stringsAsFactors = FALSE)
+lines <- data.frame(vlines =Patient2$Sum, labels = c("0 w", "2 w", '6 w'), stringsAsFactors = FALSE)
+lines <- data.frame(vlines =Patient2$Sum, labels = c("0 w", "2 w", '6 w', '14 w'), stringsAsFactors = FALSE)
+lines <- data.frame(vlines =Patient2$Sum, labels = c("0 w", "2 w", '6 w', '14 w', '26 w'), stringsAsFactors = FALSE)
+
+```
+
+### Plot MMB histogram
+```{r, fig.width = 3, fig.height=1.8}
+histo<-ggplot(inflamm, aes(Sum, fill = cut(Sum, 20) )) +
+    geom_histogram(colour="black", binwidth = 2 )+
+  scale_fill_discrete(h = c(120, 20), c = 80, l = 60 ) +
+  theme_bw() +
+  labs(x = "Inflamation score", y = "N samples") +
+  theme(legend.position = "none") +
+  scale_x_continuous(n.breaks = 10) +
+  scale_y_continuous(n.breaks = 6) +
+  geom_vline(data = lines, aes(xintercept = vlines))+
+  geom_text(data = lines, aes(x = vlines, y = 12, angle=90,label = labels, hjust=0.8,  vjust=1),
+    inherit.aes = FALSE, color=c( 'black','forestgreen', 'red', 'blue'))
+   # inherit.aes = FALSE, color=c( 'black','forestgreen', 'red', 'blue', 'gold'))
+   # inherit.aes = FALSE, color=c( 'black', 'red'))
+
+
+pdf("Histogram_PatientX_0w2w6w14w.pdf", width = 5, height = 2.8)
+histo
+dev.off()
+
+```
+
