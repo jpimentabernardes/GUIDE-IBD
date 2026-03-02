@@ -7,6 +7,7 @@ Pipeline ran per patient included the the molecular board arm per timepoint. The
 ### Manuscript under preparation.
 
 Additional information:
+
 MOLECULAR REPORT GENERATION
 Principal component analysis (PCA) was performed separately on blood and biopsy reference groups using normalized expression values of the respective biomarker panel. PCA was employed to identify molecular patterns corresponding to baseline, remission, and non-remission states. Confidence regions for reference groups were estimated using multivariate t-distributions at 0.90, 0.80, and 0.70 confidence levels.
 For each query sample, normalized qPCR expression data were projected into the pre-defined PCA space of the corresponding reference cohort. The molecular report was cumulative: for each patient, every new sample collected added a data point to the PCA plot, allowing for tracking molecular trajectories over time in relation to baseline, remission, and non-remission states.
